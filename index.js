@@ -39,7 +39,7 @@ async function run() {
       const jobs = await JobsCollection.find().toArray();
       res.send(jobs);
     });
-// get single job by id
+    // get single job by id
     app.get('/job/:id', async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
@@ -54,7 +54,18 @@ async function run() {
       const jobs = await JobsCollection.find(query).toArray();
       res.send(jobs);
     });
-
+    // Update a jobData in the db
+    app.put('/update-job/:id', async (req, res) => {
+      const jobData = req.body;
+      const id = req.params.id;
+      const updated = {
+        $set: jobData,
+      };
+      const query = { _id: new ObjectId(id) };
+      const options = { upsert: true };
+      const result = await JobsCollection.updateOne(query, updated, options);
+      res.send(result);
+    });
     // delete a job by its id
     app.delete('/job/:id', async (req, res) => {
       const id = req.params.id;
