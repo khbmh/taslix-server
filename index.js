@@ -26,24 +26,25 @@ async function run() {
     await client.connect();
 
     const db = client.db('taslix');
-    const JobsCollection = db.collection('jobs');
+    const jobsCollection = db.collection('jobs');
+    const bidsCollection = db.collection('bids');
 
     // Save a jobData in the db
     app.post('/add-job', async (req, res) => {
       const jobData = req.body;
-      const result = await JobsCollection.insertOne(jobData);
+      const result = await jobsCollection.insertOne(jobData);
       res.send(result);
     });
     // get all posted jobs
     app.get('/jobs', async (req, res) => {
-      const jobs = await JobsCollection.find().toArray();
+      const jobs = await jobsCollection.find().toArray();
       res.send(jobs);
     });
     // get single job by id
     app.get('/job/:id', async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
-      const job = await JobsCollection.findOne(query);
+      const job = await jobsCollection.findOne(query);
       res.send(job);
     });
 
@@ -51,7 +52,7 @@ async function run() {
     app.get('/jobs/:email', async (req, res) => {
       const email = req.params.email;
       const query = { 'buyer.email': email };
-      const jobs = await JobsCollection.find(query).toArray();
+      const jobs = await jobsCollection.find(query).toArray();
       res.send(jobs);
     });
     // Update a jobData in the db
@@ -63,15 +64,54 @@ async function run() {
       };
       const query = { _id: new ObjectId(id) };
       const options = { upsert: true };
-      const result = await JobsCollection.updateOne(query, updated, options);
+      const result = await jobsCollection.updateOne(query, updated, options);
       res.send(result);
     });
     // delete a job by its id
     app.delete('/job/:id', async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
-      const result = await JobsCollection.deleteOne(query);
+      const result = await jobsCollection.deleteOne(query);
       res.send(result);
+    });
+    /*
+          bids
+    */
+    // Save a bidData in the db
+    app.post('/add-bid', async (req, res) => {
+      const bidData = req.body;
+      // 0. user already placed a bid
+      const query = { email: bidData.email, jobId: bidData.jobId };
+      const alreadyExists = await bidsCollection.findOne(query);
+      if (alreadyExists) {
+        return res.status(409).send('You have already placed a bid.');
+      }
+
+      // 1. save in bid data
+      const result = await bidsCollection.insertOne(bidData);
+
+      // 2. update bid count in job data
+      const filter = { _id: new ObjectId(bidData.jobId) };
+      const update = {
+        $inc: { bid_count: 1 },
+      };
+      const updateBidCount = await jobsCollection.updateOne(filter, update);
+
+      res.send(result);
+    });
+
+    // get all bids
+    app.get('/bids', async (req, res) => {
+      const bids = await bidsCollection.find().toArray();
+      res.send(bids);
+    });
+
+    // get a user posted jobs using user email
+    app.get('/bids/:email', async (req, res) => {
+      const email = req.params.email;
+      const query = { email: email };
+      const bids = await bidsCollection.find(query).toArray();
+      res.send(bids);
     });
 
     // Send a ping to confirm a successful connection
