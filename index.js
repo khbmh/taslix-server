@@ -29,6 +29,15 @@ async function run() {
     const jobsCollection = db.collection('jobs');
     const bidsCollection = db.collection('bids');
 
+    // generate json web token (jwt)
+    // const jwt = require('jsonwebtoken');
+    // const SECRET_KEY = process.env.JWT_SECRET;
+
+    // const generateToken = (id) => {
+    //   return jwt.sign({ id }, SECRET_KEY, { expiresIn: '1h' });
+    // };
+    
+
     // Save a jobData in the db
     app.post('/add-job', async (req, res) => {
       const jobData = req.body;
@@ -40,6 +49,31 @@ async function run() {
       const jobs = await jobsCollection.find().toArray();
       res.send(jobs);
     });
+
+    // get all jobs with filters
+    app.get('/all-jobs', async (req, res) => {
+      const filter = req.query.filter;
+      const search = req.query.search;
+      const sort = req.query.sort;
+      // console.log(search);
+      let options = {};
+
+      if (sort)
+        options = {
+          sort: { deadline: sort === 'asc' ? 1 : sort === 'dsc' ? '-1' : 0 },
+        };
+      let query = {
+        title: { $regex: search, $options: 'i' },
+      };
+
+      if (filter) {
+        query.category = filter;
+      }
+
+      const jobs = await jobsCollection.find(query, options).toArray();
+      res.send(jobs);
+    });
+
     // get single job by id
     app.get('/job/:id', async (req, res) => {
       const id = req.params.id;
@@ -100,19 +134,49 @@ async function run() {
       res.send(result);
     });
 
+    // update a bid
+    app.patch('/bid-status-update/:id', async (req, res) => {
+      const id = req.params.id;
+      const { status } = req.body;
+      // return console.log(status);
+      const filter = { _id: new ObjectId(id) };
+      const updated = {
+        $set: { status },
+      };
+      const result = await bidsCollection.updateOne(filter, updated);
+      res.send(result);
+    });
+
     // get all bids
     app.get('/bids', async (req, res) => {
       const bids = await bidsCollection.find().toArray();
       res.send(bids);
     });
 
-    // get a user posted jobs using user email
+    // get a user posted bids using user email
     app.get('/bids/:email', async (req, res) => {
+      const isBuyer = req.query.buyer;
       const email = req.params.email;
-      const query = { email: email };
+      // when value is must need and value is dynamic then we have to use params
+      // console.log(isBuyer);
+      let query = {};
+      // when value is not dynamic and not a must have then we should use query
+      if (isBuyer) {
+        query.buyerEmail = email; // { email: email } key == value
+      } else {
+        query.email = email;
+      }
+      // const query = { email }; // { email: email } key == value
       const bids = await bidsCollection.find(query).toArray();
       res.send(bids);
     });
+    // get a user posted bids using buyer email
+    // app.get('/bid-requests/:email', async (req, res) => {
+    //   const buyerEmail = req.params.email;
+    //   const query = { buyerEmail  }; // { email: email } key == value
+    //   const bids = await bidsCollection.find(query).toArray();
+    //   res.send(bids);
+    // });
 
     // Send a ping to confirm a successful connection
     await client.db('admin').command({ ping: 1 });
