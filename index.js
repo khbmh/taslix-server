@@ -1,12 +1,24 @@
 const express = require('express');
 const cors = require('cors');
+const jwt = require('jsonwebtoken');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config();
 
 const port = process.env.PORT || 9000;
 const app = express();
 
-app.use(cors());
+const corsOptions = {
+  origin: [
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'https://taslix.netlify.app/',
+    'https://taslix.web.app/',
+  ],
+  credentials: true,
+  optionsSuccessStatus: 200, // some browsers choke on 204
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.pzdjl.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -30,13 +42,65 @@ async function run() {
     const bidsCollection = db.collection('bids');
 
     // generate json web token (jwt)
-    // const jwt = require('jsonwebtoken');
-    // const SECRET_KEY = process.env.JWT_SECRET;
+    /*
+    const jwt = require('jsonwebtoken');
+    const SECRET_KEY = process.env.JWT_SECRET;
 
-    // const generateToken = (id) => {
-    //   return jwt.sign({ id }, SECRET_KEY, { expiresIn: '1h' });
-    // };
-    
+    const generateToken = (id) => {
+      return jwt.sign({ id }, SECRET_KEY, { expiresIn: '1h' });
+    };
+*/
+    // generate token
+    app.post('/jwt', async (req, res) => {
+      const email = req.body;
+      // create a token
+      const token = jwt.sign(email, process.env.SECRET_KEY, {
+        expiresIn: '50d',
+      });
+      // console.log(token);
+      // res.send(token); // uncommenting this line took longer
+      res
+        .cookie('token', token, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+        })
+        .send({ success: true });
+    });
+    // clear cookies from browser
+    app.get('/logout', (req, res) => {
+      res.clearCookie('token', {
+        maxAge: 0,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+      });
+      res.send({ success: true });
+    });
+// ai helped below code
+    /*
+app.post('/jwt', async (req, res) => {
+  try {
+    const email = req.body;
+
+    // Create a token
+    const token = jwt.sign(email, process.env.SECRET_KEY, {
+      expiresIn: '50d',
+    });
+
+    // Set the token as a cookie and send the response
+    res
+      .cookie('token', token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+      })
+      .send({ success: true, token });
+  } catch (error) {
+    console.error('Error generating JWT:', error);
+    res.status(500).send({ success: false, message: 'Internal Server Error' });
+  }
+});
+    */
 
     // Save a jobData in the db
     app.post('/add-job', async (req, res) => {
@@ -180,9 +244,9 @@ async function run() {
 
     // Send a ping to confirm a successful connection
     await client.db('admin').command({ ping: 1 });
-    console.log(
-      'Pinged your deployment. You successfully connected to MongoDB!',
-    );
+    // console.log(
+    //   'Pinged your deployment. You successfully connected to MongoDB!',
+    // );
   } catch (error) {
     console.error('Error connecting to MongoDB:', error);
   }
