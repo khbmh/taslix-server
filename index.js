@@ -3,6 +3,7 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config();
+const cookieParser = require('cookie-parser');
 
 const port = process.env.PORT || 9000;
 const app = express();
@@ -20,6 +21,7 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.use(express.json());
+app.use(cookieParser());
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.pzdjl.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
@@ -31,6 +33,19 @@ const client = new MongoClient(uri, {
     deprecationErrors: true,
   },
 });
+
+// verify token
+const verifyToken = (req, res, next) => {
+  const token = req.cookies?.token;
+  console.log(token);
+  if (!token) return res.status(401).send({ message: 'unauthorized access' });
+  jwt.verify(token, process.env.SECRET_KEY, (err, decoded) => {
+    if (err) return res.status(403).send({ message: 'invalid token' });
+    req.user = decoded;
+    // next();
+  });
+  next();
+};
 
 async function run() {
   try {
@@ -76,7 +91,7 @@ async function run() {
       });
       res.send({ success: true });
     });
-// ai helped below code
+    // ai helped below code
     /*
 app.post('/jwt', async (req, res) => {
   try {
@@ -139,7 +154,7 @@ app.post('/jwt', async (req, res) => {
     });
 
     // get single job by id
-    app.get('/job/:id', async (req, res) => {
+    app.get('/job/:id', verifyToken, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const job = await jobsCollection.findOne(query);
@@ -147,14 +162,20 @@ app.post('/jwt', async (req, res) => {
     });
 
     // get a user posted jobs using user email
-    app.get('/jobs/:email', async (req, res) => {
+    app.get('/jobs/:email', verifyToken, async (req, res) => {
+      const decodedEmail = req.user?.email;
       const email = req.params.email;
+      // console.log('decoded', decodedEmail);
+      // console.log('params', email);
+
+      if (decodedEmail !== email)
+        return res.status(401).send({ message: 'unauthorized access' });
       const query = { 'buyer.email': email };
       const jobs = await jobsCollection.find(query).toArray();
       res.send(jobs);
     });
     // Update a jobData in the db
-    app.put('/update-job/:id', async (req, res) => {
+    app.put('/update-job/:id', verifyToken, async (req, res) => {
       const jobData = req.body;
       const id = req.params.id;
       const updated = {
@@ -166,7 +187,7 @@ app.post('/jwt', async (req, res) => {
       res.send(result);
     });
     // delete a job by its id
-    app.delete('/job/:id', async (req, res) => {
+    app.delete('/job/:id', verifyToken, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await jobsCollection.deleteOne(query);
@@ -199,7 +220,7 @@ app.post('/jwt', async (req, res) => {
     });
 
     // update a bid
-    app.patch('/bid-status-update/:id', async (req, res) => {
+    app.patch('/bid-status-update/:id', verifyToken, async (req, res) => {
       const id = req.params.id;
       const { status } = req.body;
       // return console.log(status);
@@ -218,9 +239,16 @@ app.post('/jwt', async (req, res) => {
     });
 
     // get a user posted bids using user email
-    app.get('/bids/:email', async (req, res) => {
+    app.get('/bids/:email', verifyToken, async (req, res) => {
+      const decodedEmail = req.user?.email;
       const isBuyer = req.query.buyer;
       const email = req.params.email;
+      // console.log('decoded', decodedEmail);
+      // console.log('params', email);
+
+      if (decodedEmail !== email)
+        return res.status(401).send({ message: 'unauthorized access' });
+
       // when value is must need and value is dynamic then we have to use params
       // console.log(isBuyer);
       let query = {};
